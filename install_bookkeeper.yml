@@ -8,12 +8,19 @@
     zookeeper_install_dir: "/opt/zookeeper"
     zookeeper_data_dir: "/var/lib/zookeeper"
     zookeeper_myid: "{{ inventory_hostname.split('-')[1] }}"
-
+    zookeeper_config: |
+      tickTime=2000
+      dataDir={{ zookeeper_data_dir }}
+      clientPort=2181
+      initLimit=5
+      syncLimit=2
+      server.1=10.0.0.11:2888:3888
+      server.2=10.0.0.8:2888:3888
+      server.3=10.0.0.5:2888:3888
   tasks:
     - name: Update APT cache
       apt:
         update_cache: yes
-
     - name: Install required dependencies
       apt:
         name:
@@ -21,76 +28,52 @@
           - wget
           - tar
         state: present
-
     - name: Check if Zookeeper tarball exists
       stat:
         path: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
       register: zookeeper_tarball
-
     - name: Remove existing Zookeeper tarball
       file:
         path: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
         state: absent
       when: zookeeper_tarball.stat.exists
-
     - name: Download Zookeeper
-      shell: |
-        wget https://downloads.apache.org/zookeeper/zookeeper-{{ zookeeper_version }}/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz -P /opt/
-
+      get_url:
+        url: "https://downloads.apache.org/zookeeper/zookeeper-{{ zookeeper_version }}/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
+        dest: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
     - name: Extract Zookeeper
-      shell: |
-        tar -xzf /opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz -C /opt/
-
-    - name: Remove downloaded Zookeeper tarball
-      file:
-        path: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
-        state: absent
-
+      unarchive:
+        src: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
+        dest: "/opt/"
+        remote_src: yes
     - name: Create symbolic link for Zookeeper
       file:
         src: "/opt/apache-zookeeper-{{ zookeeper_version }}-bin"
         dest: "{{ zookeeper_install_dir }}"
         state: link
-
-    - name: Ensure Zookeeper data directory exists
+    - name: Create Zookeeper data directory
       file:
         path: "{{ zookeeper_data_dir }}"
         state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Configure Zookeeper
-      copy:
-        dest: "{{ zookeeper_install_dir }}/conf/zoo.cfg"
-        content: |
-          tickTime=2000
-          dataDir={{ zookeeper_data_dir }}
-          clientPort=2181
-          initLimit=5
-          syncLimit=2
-          server.0=10.0.0.11:2888:3888
-          server.1=10.0.0.8:2888:3888
-          server.2=10.0.0.5:2888:3888
-
+        owner: zookeeper
+        group: zookeeper
     - name: Set Zookeeper myid
-      copy:
-        dest: "{{ zookeeper_data_dir }}/myid"
-        content: "{{ zookeeper_myid }}"
-
-    - name: Start Zookeeper service
-      shell: "{{ zookeeper_install_dir }}/bin/zkServer.sh start"
-
-    - name: Ensure Zookeeper is running
-      shell: ps aux | grep -v grep | grep zookeeper
-      register: zookeeper_process
-      failed_when: "zookeeper_process.rc != 0"
-      changed_when: false
-
-    - name: Display success message if Zookeeper is running
-      debug:
-        msg: "Zookeeper has been successfully installed and is running on {{ inventory_hostname }}."
-      when: zookeeper_process.rc == 0
+      lineinfile:
+        path: "{{ zookeeper_data_dir }}/myid"
+        line: "{{ zookeeper_myid }}"
+        create: yes
+    - name: Configure Zookeeper
+      lineinfile:
+        path: "{{ zookeeper_install_dir }}/conf/zoo.cfg"
+        line: "{{ item }}"
+      loop: "{{ zookeeper_config.split('\n') }}"
+      notify:
+        - restart zookeeper
+  handlers:
+    - name: restart zookeeper
+      systemd:
+        name: zookeeper
+        state: restarted
 
 - name: Install Apache BookKeeper on Bookie Servers
   hosts: bookies
@@ -104,12 +87,22 @@
       - "/opt/bookkeeper/data/ledgers"
       - "/opt/bookkeeper/data/indexes"
     zookeeper_servers: "10.0.0.11:2181,10.0.0.8:2181,10.0.0.5:2181"
+    bookkeeper_config: |
+      # Zookeeper connection string
+      zkServers={{ zookeeper_servers }}
 
+      # Journal directory
+      journalDirectory={{ bookkeeper_data_dirs[0] }}
+
+      # Ledger directory
+      ledgerDirectories={{ bookkeeper_data_dirs[1] }}
+
+      # Index directory
+      indexDirectories={{ bookkeeper_data_dirs[2] }}
   tasks:
     - name: Update APT cache
       apt:
         update_cache: yes
-
     - name: Install required dependencies
       apt:
         name:
@@ -117,76 +110,45 @@
           - wget
           - tar
         state: present
-
     - name: Check if BookKeeper tarball exists
       stat:
         path: "/opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
       register: bookkeeper_tarball
-
     - name: Remove existing BookKeeper tarball
       file:
         path: "/opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
         state: absent
       when: bookkeeper_tarball.stat.exists
-
     - name: Download Apache BookKeeper
-      shell: |
-        wget https://downloads.apache.org/bookkeeper/bookkeeper-{{ bookkeeper_version }}/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz -P /opt/
-
+      get_url:
+        url: "https://downloads.apache.org/bookkeeper/bookkeeper-{{ bookkeeper_version }}/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
+        dest: "/opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
     - name: Extract Apache BookKeeper
-      shell: |
-        tar -xzf /opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz -C /opt/
-
-    - name: Remove downloaded BookKeeper tarball
-      file:
-        path: "/opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
-        state: absent
-
+      unarchive:
+        src: "/opt/bookkeeper-server-{{ bookkeeper_version }}-bin.tar.gz"
+        dest: "/opt/"
+        remote_src: yes
     - name: Create symbolic link for BookKeeper
       file:
         src: "/opt/bookkeeper-server-{{ bookkeeper_version }}"
         dest: "{{ bookkeeper_install_dir }}"
         state: link
-
-    - name: Ensure BookKeeper data directories exist
+    - name: Create BookKeeper data directories
       file:
         path: "{{ item }}"
         state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      with_items: "{{ bookkeeper_data_dirs }}"
-
+        owner: bookkeeper
+        group: bookkeeper
+      loop: "{{ bookkeeper_data_dirs }}"
     - name: Configure BookKeeper
-      copy:
-        dest: "{{ bookkeeper_install_dir }}/conf/bk_server.conf"
-        content: |
-          zkServers={{ zookeeper_servers }}
-          bookiePort=3181
-          journalDirectory={{ bookkeeper_data_dirs[0] }}
-          ledgerDirectories={{ bookkeeper_data_dirs[1] }}
-          indexDirectories={{ bookkeeper_data_dirs[2] }}
-          # Add other configurations as needed
-
-    - name: Verify BookKeeper installation
-      shell: ls -l {{ bookkeeper_install_dir }}/bin/
-      register: bookkeeper_bin_contents
-
-    - name: Debug BookKeeper bin contents
-      debug:
-        var: bookkeeper_bin_contents.stdout_lines
-
-    - name: Start BookKeeper service
-      shell: "{{ bookkeeper_install_dir }}/bin/bookkeeper-daemon.sh start bookie"
-      when: "'bookkeeper-daemon.sh' in bookkeeper_bin_contents.stdout_lines"
-
-    - name: Ensure BookKeeper is running
-      shell: ps aux | grep -v grep | grep bookie
-      register: bookkeeper_process
-      failed_when: "bookkeeper_process.rc != 0"
-      changed_when: false
-
-    - name: Display success message if BookKeeper is running
-      debug:
-        msg: "Apache BookKeeper has been successfully installed and is running on {{ inventory_hostname }}."
-      when: bookkeeper_process.rc == 0
+      lineinfile:
+        path: "{{ bookkeeper_install_dir }}/conf/bookkeeper.conf"
+        line: "{{ item }}"
+      loop: "{{ bookkeeper_config.split('\n') }}"
+      notify:
+        - restart bookkeeper
+  handlers:
+    - name: restart bookkeeper
+      systemd:
+        name: bookkeeper
+        state: restarted
