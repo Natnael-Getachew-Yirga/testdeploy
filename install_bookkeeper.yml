@@ -99,7 +99,7 @@
     bookkeeper_data_dirs:
       - "/var/lib/bookkeeper/ledger"
     bookkeeper_journal_dir: "/var/lib/bookkeeper/journal"
-    zookeeper_servers: "10.0.0.4:2181,10.0.0.5:2181,10.0.0.6:2181"
+    zookeeper_servers: "10.0.0.4:2181;10.0.0.5:2181;10.0.0.6:2181"
   tasks:
     - name: Remove old BookKeeper installation files and directories
       file:
@@ -160,9 +160,15 @@
     - name: Run metaformat command (only on the first bookie)
       shell: "{{ bookkeeper_install_dir }}/bin/bookkeeper shell metaformat"
       when: inventory_hostname == groups['bookies'][0]
+    
+ 
+    - name: Start BookKeeper bookie service
+      shell: "{{ bookkeeper_install_dir }}/bin/bookkeeper bookie"
+      async: 60
+      poll: 0
+      become: yes
+      ignore_errors: yes
 
-
-    - name: Run metaformat command (only on the first bookie)
-      shell: "{{ bookkeeper_install_dir }}/bin/bookkeeper shell metaformat"
-      when: inventory_hostname == groups['bookies'][1]
+  
+  
 
