@@ -14,26 +14,13 @@ services:
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
   
-  bookie-0:
-    image: mock-ec2
-    container_name: bookie-0
-    hostname: bookie-0
-    networks:
-      bookkeeper_network:
-        ipv4_address: 10.0.0.6
-    ports:
-      - "2222:22"  # SSH port for bookie-0
-    command: /usr/sbin/sshd -D
-
   bookie-1:
     image: mock-ec2
     container_name: bookie-1
-    hostname: bookie-1create
+    hostname: bookie-1
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.7
-    ports:
-      - "2223:22"  # SSH port for bookie-1
+        ipv4_address: 10.0.0.9
     command: /usr/sbin/sshd -D
 
   bookie-2:
@@ -42,20 +29,16 @@ services:
     hostname: bookie-2
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.10
-    ports:
-      - "2224:22"  # SSH port for bookie-2
+        ipv4_address: 10.0.0.2
     command: /usr/sbin/sshd -D
 
-  zk-0:
+  bookie-3:
     image: mock-ec2
-    container_name: zk-0
-    hostname: zk-0
+    container_name: bookie-3
+    hostname: bookie-3
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.11
-    ports:
-      - "2225:22"  # SSH port for zk-0
+        ipv4_address: 10.0.0.3
     command: /usr/sbin/sshd -D
 
   zk-1:
@@ -64,9 +47,7 @@ services:
     hostname: zk-1
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.8
-    ports:
-      - "2226:22"  # SSH port for zk-1
+        ipv4_address: 10.0.0.4
     command: /usr/sbin/sshd -D
 
   zk-2:
@@ -76,19 +57,15 @@ services:
     networks:
       bookkeeper_network:
         ipv4_address: 10.0.0.5
-    ports:
-      - "2227:22"  # SSH port for zk-2
     command: /usr/sbin/sshd -D
 
-  bookkeeper-client-0:
+  zk-3:
     image: mock-ec2
-    container_name: bookkeeper-client-0
-    hostname: bookkeeper-client-0
+    container_name: zk-3
+    hostname: zk-3
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.9
-    ports:
-      - "2228:22"  # SSH port for bookkeeper-client-0
+        ipv4_address: 10.0.0.6
     command: /usr/sbin/sshd -D
 
   bookkeeper-client-1:
@@ -97,9 +74,16 @@ services:
     hostname: bookkeeper-client-1
     networks:
       bookkeeper_network:
-        ipv4_address: 10.0.0.4
-    ports:
-      - "2229:22"  # SSH port for bookkeeper-client-1
+        ipv4_address: 10.0.0.7
+    command: /usr/sbin/sshd -D
+
+  bookkeeper-client-2:
+    image: mock-ec2
+    container_name: bookkeeper-client-2
+    hostname: bookkeeper-client-2
+    networks:
+      bookkeeper_network:
+        ipv4_address: 10.0.0.8
     command: /usr/sbin/sshd -D
 
 networks:
